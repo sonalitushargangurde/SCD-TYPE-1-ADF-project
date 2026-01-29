@@ -1,0 +1,73 @@
+--creat staging table
+CREATE TABLE stg_customer (
+    customer_id INT,
+    customer_name VARCHAR(100),
+    email VARCHAR(100),
+    city VARCHAR(50),
+    phone VARCHAR(15),
+    last_updated DATETIME
+);
+
+select * from stg_customer
+
+
+----create dimention table
+CREATE TABLE dim_customer (
+    customer_id INT PRIMARY KEY,
+    customer_name VARCHAR(100),
+    email VARCHAR(100),
+    city VARCHAR(50),
+    phone VARCHAR(15),
+    last_updated DATETIME
+);
+
+
+select * from dim_customer
+
+------create store procedure
+
+CREATE PROCEDURE sp_scd1_customer_merge
+AS
+BEGIN
+    SET NOCOUNT ON;
+MERGE dim_customer AS target
+USING (
+    SELECT customer_id, customer_name, email, city, phone, last_updated
+    FROM (
+        SELECT *,
+               ROW_NUMBER() OVER (
+                   PARTITION BY customer_id
+                   ORDER BY last_updated DESC
+               ) AS rn
+        FROM stg_customer
+    ) t
+    WHERE rn = 1
+) AS source
+ON target.customer_id = source.customer_id
+
+WHEN MATCHED THEN
+UPDATE SET
+    target.customer_name = source.customer_name,
+    target.email        = source.email,
+    target.city         = source.city,
+    target.phone        = source.phone,
+    target.last_updated = source.last_updated
+
+WHEN NOT MATCHED THEN
+INSERT (
+    customer_id,
+    customer_name,
+    email,
+    city,
+    phone,
+    last_updated
+)
+VALUES (
+    source.customer_id,
+    source.customer_name,
+    source.email,
+    source.city,
+    source.phone,
+    source.last_updated
+);
+END;
